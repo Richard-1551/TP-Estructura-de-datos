@@ -10,6 +10,9 @@ from __future__ import annotations
 from typing import List, Optional
 from datetime import datetime
 import itertools
+import heapq
+from collections import deque
+
 
 _id_counter = itertools.count(1)
 
@@ -250,3 +253,79 @@ class ServidorCorreo:
         print("Usuarios registrados:")
         for email, u in self._usuarios.items():
             print(f"- {u.nombre} <{email}>")
+
+class ServidorCorreoAvanzado(ServidorCorreo):
+    
+    def __init__(self, nombre):
+        super().__init__()
+        self._nombre = nombre
+        self._filtros: dict[str, str] = {}  # ejemplo: {"promo": "spam", "trabajo": "laboral"}
+        self._cola_prioridad = []  # mensajes urgentes
+        self._conexiones: dict[str, list[str]] = {}  # grafo de servidores
+
+    def agregar_filtro(self, palabra_clave: str, carpeta_destino: str):
+        """agrega un filtro automatico"""
+        self._filtros[palabra_clave.lower()] = carpeta_destino.lower()
+
+    def aplicar_filtros(self, usuario: Usuario, mensaje: Mensaje):
+        """mueve automaticamente los mensajes segun filtros"""
+        for palabra, carpeta in self._filtros.items():
+            if palabra in mensaje.asunto.lower() or palabra in mensaje.cuerpo.lower():
+                destino = usuario.root.encontrar_subcarpeta_por_ruta([carpeta])
+                if destino:
+                    usuario.mover_mensaje(mensaje.id, [carpeta])
+                    print(f"Filtro aplicado: '{palabra}' movio mensaje a {carpeta}")
+                    return
+        print("No se aplico ningun filtro")
+
+    def agregar_mensaje_urgente(self, mensaje: Mensaje, prioridad: int):
+        """guarda mensajes urgentes en una cola"""
+        heapq.heappush(self._cola_prioridad, (prioridad, mensaje))
+        print(f"Mensaje urgente agregado con prioridad {prioridad}")
+
+    def procesar_mensajes_urgentes(self):
+        """procesa la cola de prioridad"""
+        print("Procesando mensajes urgentes:")
+        while self._cola_prioridad:
+            prioridad, mensaje = heapq.heappop(self._cola_prioridad)
+            print(f"Mensaje urgente (prioridad {prioridad}): {mensaje.asunto}")
+
+    # Red de servidores
+
+    def conectar_servidor(self, otro: ServidorCorreoAvanzado):
+        """conecta este servidor con otro (grafo no dirigido)"""
+        if self._nombre not in self._conexiones:
+            self._conexiones[self._nombre] = []
+        if otro._nombre not in self._conexiones:
+            self._conexiones[otro._nombre] = []
+
+        self._conexiones[self._nombre].append(otro._nombre)
+        self._conexiones[otro._nombre].append(self._nombre)
+        print(f"Servidores conectados: {self._nombre} <-> {otro._nombre}")
+
+    def mostrar_conexiones(self):
+        """muestra el grafo de servidores"""
+        print("Red de servidores:")
+        for serv, vecinos in self._conexiones.items():
+            print(f"{serv}: {vecinos}")
+
+    def enviar_mensaje_red(self, origen: str, destino: str):
+        """simula envio de mensaje entre servidores usando BFS"""
+        if origen not in self._conexiones or destino not in self._conexiones:
+            print("Alguno de los servidores no existe en la red")
+            return
+
+        visitados = set()
+        cola = deque([origen])
+        print(f"Iniciando BFS desde {origen}")
+
+        while cola:
+            actual = cola.popleft()
+            if actual == destino:
+                print(f"Mensaje entregado correctamente de {origen} a {destino}")
+                return
+            visitados.add(actual)
+            for vecino in self._conexiones.get(actual, []):
+                if vecino not in visitados:
+                    cola.append(vecino)
+        print("No fue posible entregar el mensaje")
